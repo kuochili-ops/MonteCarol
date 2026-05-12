@@ -7,15 +7,14 @@
     <style>
         :root {
             --bg-color: #1a472a;
-            --card-w: 70px;
-            --card-h: 98px;
+            --card-w: 68px; /* 稍微縮小牌寬以騰出空間 */
+            --card-h: 95px;
             --gap: 8px;
-            /* 調整容器內部邊距，給予兩側更多呼吸空間 */
-            --container-padding: 16px;
+            --container-padding: 10px; /* 縮減內距，讓牌組更往中心靠 */
             --base-url: 'https://raw.githubusercontent.com/kuochili-ops/xcards/refs/heads/master/svg';
         }
         @media (min-width: 500px) { 
-            :root { --card-w: 80px; --card-h: 112px; --gap: 12px; --container-padding: 20px; } 
+            :root { --card-w: 80px; --card-h: 112px; --gap: 12px; --container-padding: 15px; } 
         }
 
         body {
@@ -27,19 +26,20 @@
             user-select: none; -webkit-user-select: none;
         }
 
-        .header { text-align: center; margin-bottom: 8px; width: 100%; height: 60px; }
+        .header { text-align: center; margin-bottom: 8px; width: 100%; }
         .header h1 { margin: 2px 0; color: #ffeb3b; font-size: 1.3rem; }
 
         .grid-container {
             position: relative;
-            /* 讓桌面水平置中 */
-            margin: 0 auto;
+            /* 修正計算：精確符合 5 張牌 + 4 個間隙 + 兩倍內距 */
             width: calc(5 * var(--card-w) + 4 * var(--gap) + 2 * var(--container-padding));
             height: calc(5 * var(--card-h) + 4 * var(--gap) + 2 * var(--container-padding));
             background: rgba(0,0,0,0.3);
             border-radius: 12px;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
             box-sizing: border-box;
+            /* 移除多餘的左右推力，純粹靠 flex 置中 */
+            margin: 0 auto;
         }
 
         .card {
@@ -50,7 +50,7 @@
             transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
             will-change: transform;
             z-index: 2;
-            /* 基準點位於內邊距位置 */
+            /* 起始位置嚴格對齊 padding */
             left: var(--container-padding);
             top: var(--container-padding);
         }
@@ -60,7 +60,6 @@
             box-shadow: 2px 2px 8px rgba(0,0,0,0.4); background: white; pointer-events: none;
         }
         
-        /* 選取標記：原地外框反閃 */
         .card.selected { z-index: 50; }
         .card.selected img {
             outline: 3px solid #ffeb3b;
@@ -72,7 +71,6 @@
             to { filter: brightness(1.3); }
         }
 
-        /* 提醒方式 */
         .card.hint-flash { z-index: 40; }
         .card.hint-flash img {
             animation: hint-glow 0.6s ease-in-out infinite alternate;
@@ -96,17 +94,13 @@
             padding: 10px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
             cursor: pointer; box-shadow: 0 4px 0 #c6a700; font-size: 1rem;
-            transition: transform 0.1s;
         }
-        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #c6a700; }
         button.repack-btn { background: #03a9f4; color: white; box-shadow: 0 4px 0 #0288d1; }
-        button.repack-btn:active { box-shadow: 0 2px 0 #0288d1; }
 
         .toast {
             position: fixed; top: 15%; background: rgba(0,0,0,0.9);
             padding: 10px 20px; border-radius: 20px; color: #ffeb3b;
             opacity: 0; transition: opacity 0.3s; z-index: 2000; border: 1px solid #ffeb3b;
-            pointer-events: none;
         }
 
         .overlay {
@@ -135,7 +129,7 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.2rem; margin-bottom: 10px; text-align: center;"></h2>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2rem; margin-bottom: 10px; text-align: center;"></h2>
         <p style="font-size: 1.4rem;">最終得分：<span id="final-score">0</span></p>
         <button onclick="game.init()" style="margin-top: 30px;">再玩一次</button>
     </div>
@@ -314,11 +308,7 @@
             checkGameState() {
                 const match = this.findMatch();
                 const cardCount = this.table.filter(c => c).length;
-                
-                if (cardCount === 0 && this.deck.length === 0) {
-                    this.endGame("🎉 完美消除！勝利！", true);
-                    return;
-                }
+                if (cardCount === 0 && this.deck.length === 0) { this.endGame("🎉 完美消除！勝利！", true); return; }
 
                 if (!match) {
                     const isRepacked = this.table.every((c, i) => i < cardCount ? c !== null : c === null);
