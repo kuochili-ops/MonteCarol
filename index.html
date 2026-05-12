@@ -7,6 +7,7 @@
     <style>
         :root {
             --bg-color: #1a472a;
+            /* 預計算卡片寬高 */
             --card-w: calc((100vw - 70px) / 5); 
             --card-h: calc(var(--card-w) * 1.4);
             --base-url: 'https://raw.githubusercontent.com/kuochili-ops/xcards/refs/heads/master/svg';
@@ -26,11 +27,16 @@
         .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 
         .grid {
-            display: grid; grid-template-columns: repeat(5, var(--card-w));
+            display: grid; 
+            grid-template-columns: repeat(5, var(--card-w));
+            /* 強制鎖定 5 列的高度，防止 repack 時框架塌陷 */
             grid-template-rows: repeat(5, var(--card-h));
             gap: 8px; padding: 10px; background: rgba(0,0,0,0.4);
             border-radius: 12px; position: relative; margin: 0 auto;
             box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+            /* 顯式設定最小高度 */
+            min-height: calc(5 * var(--card-h) + 4 * 8px + 20px); 
+            width: calc(5 * var(--card-w) + 4 * 8px + 20px);
         }
 
         .card {
@@ -62,7 +68,7 @@
             100% { transform: scale(0); opacity: 0; }
         }
 
-        .empty-slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.1); border-radius: 6px; }
+        .empty-slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.05); border-radius: 6px; }
         .controls { margin-top: 20px; display: flex; gap: 12px; }
         
         button {
@@ -147,7 +153,10 @@
                 this.gridEl.innerHTML = '';
                 document.getElementById('deck-cnt').innerText = this.deck.length;
                 document.getElementById('score-cnt').innerText = this.score;
-                this.table.forEach((card, i) => {
+                
+                // 始終渲染 25 個槽位，確保容器尺寸不變
+                for(let i=0; i<25; i++) {
+                    const card = this.table[i];
                     const slot = document.createElement('div');
                     if (card) {
                         slot.className = 'card' + (this.selectedIdx === i ? ' selected' : '');
@@ -156,9 +165,11 @@
                         img.src = `${this.baseUrl}/face/${card.r}${card.s}.svg`;
                         slot.appendChild(img);
                         slot.onclick = () => this.handleClick(i);
-                    } else { slot.className = 'empty-slot'; }
+                    } else { 
+                        slot.className = 'empty-slot'; 
+                    }
                     this.gridEl.appendChild(slot);
-                });
+                }
             }
 
             async handleClick(i) {
@@ -212,7 +223,6 @@
             tryRepack() {
                 if (this.isAnimating) return;
                 const match = this.findMatch();
-                
                 if (match) {
                     this.showToast("尚有配對牌可消除");
                     this.gridEl.children[match[0]].classList.add('hint-flash');
@@ -222,7 +232,6 @@
                     if (emptyCount > 0 && this.deck.length > 0) {
                         this.repack();
                     } else {
-                        // 雖然還有牌堆，但盤面已滿 (emptyCount == 0) 且無配對，Repack 也無法運作
                         this.checkGameState();
                     }
                 }
@@ -235,6 +244,7 @@
                 Array.from(this.gridEl.querySelectorAll('.card')).forEach(el => oldRects.set(el.dataset.id, el.getBoundingClientRect()));
 
                 let remaining = this.table.filter(c => c !== null);
+                // 關鍵：即使在動畫中，也要補足 25 格，防止 Grid 縮小
                 this.table = [...remaining, ...Array(25 - remaining.length).fill(null)];
                 this.render();
 
@@ -251,12 +261,13 @@
                 await new Promise(r => setTimeout(r, shiftDuration + 100));
 
                 if (this.deck.length > 0) {
-                    const emptyCount = 25 - remaining.length;
+                    const emptyIndices = [];
+                    this.table.forEach((c, idx) => { if (c === null) emptyIndices.push(idx); });
+                    
                     const gridRect = this.gridEl.getBoundingClientRect();
-                    for (let i = 0; i < emptyCount; i++) {
+                    for (let targetIdx of emptyIndices) {
                         if (this.deck.length === 0) break;
                         const newCard = this.deck.shift();
-                        const targetIdx = remaining.length + i;
                         this.table[targetIdx] = newCard;
 
                         const oldSlot = this.gridEl.children[targetIdx];
@@ -287,20 +298,15 @@
                 const cardCount = this.table.filter(c => c).length;
                 const emptyCount = 25 - cardCount;
 
-                // 1. 勝利：盤面與牌堆皆空
                 if (cardCount === 0 && this.deck.length === 0) {
                     this.endGame("恭喜！全配對消除", true);
                     return;
                 }
 
-                // 2. 失敗 (鎖死判斷修正)：
-                // - 如果現在沒配對 (match === null)
-                // - 且 (牌堆已空 OR 盤面全滿沒空格可 Repack)
                 if (!match && (this.deck.length === 0 || emptyCount === 0)) {
                     this.endGame("遊戲結束", false);
                 } 
-                // 3. 提示 Repack：沒配對、盤面有空格、且還有補牌機會
-                else if (!match && this.deck.length > 0 && emptyCount > 0) {
+                else if (!match && this.deck.length > 0) {
                     this.showToast("無配對牌，請重新排列");
                 }
             }
