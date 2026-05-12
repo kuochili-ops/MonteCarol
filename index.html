@@ -26,11 +26,11 @@
             color: white; font-family: -apple-system, sans-serif;
             display: flex; flex-direction: column; align-items: center;
             margin: 0; padding: 10px; min-height: 100vh; overflow: hidden;
+            user-select: none; -webkit-user-select: none;
         }
 
         .grid-container {
             position: relative;
-            /* 顯式設定寬高防止晃動 */
             width: calc(5 * var(--card-w) + 4 * var(--gap) + 20px);
             height: calc(5 * var(--card-h) + 4 * var(--gap) + 20px);
             background: rgba(0,0,0,0.4);
@@ -46,7 +46,7 @@
             cursor: pointer;
             transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
             will-change: transform;
-            left: 0; top: 0; /* 基礎座標在左上 */
+            left: 0; top: 0;
             z-index: 2;
         }
         
@@ -55,21 +55,39 @@
             box-shadow: 2px 4px 8px rgba(0,0,0,0.4); background: white; pointer-events: none;
         }
         
-        .card.selected { z-index: 50; transform: scale(1.1) !important; }
-        .card.selected img { box-shadow: 0 0 15px #ffeb3b; border: 2px solid #ffeb3b; }
+        /* 修改：點選標記僅使用外框反閃，不縮放 */
+        .card.selected img {
+            outline: 3px solid #ffeb3b;
+            box-shadow: 0 0 15px #ffeb3b, 0 0 30px #ffeb3b;
+            animation: selected-blink 0.8s infinite;
+        }
+        @keyframes selected-blink {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+
+        /* 恢復：提醒方式 */
+        .card.hint-flash img {
+            animation: hint-glow 0.6s ease-in-out infinite alternate;
+            z-index: 40;
+        }
+        @keyframes hint-glow {
+            from { outline: 2px solid #ffeb3b; box-shadow: 0 0 5px #ffeb3b; }
+            to { outline: 4px solid #ffffff; box-shadow: 0 0 20px #ffeb3b; }
+        }
 
         .card.match-flash {
             animation: flash-out 0.4s ease-out forwards;
             z-index: 100;
         }
         @keyframes flash-out {
-            0% { opacity: 1; filter: brightness(2); transform: scale(1.1); }
-            100% { opacity: 0; transform: scale(0); }
+            0% { opacity: 1; filter: brightness(2); }
+            100% { opacity: 0; transform: translateY(-20px); }
         }
 
         .controls { margin-top: 20px; display: flex; gap: 12px; }
         button {
-            padding: 12px 20px; border: none; border-radius: 25px;
+            padding: 12px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
             cursor: pointer; box-shadow: 0 4px 0 #c6a700;
         }
@@ -78,7 +96,14 @@
         .toast {
             position: fixed; top: 15%; background: rgba(0,0,0,0.9);
             padding: 10px 20px; border-radius: 20px; color: #ffeb3b;
-            opacity: 0; transition: opacity 0.3s; z-index: 2000;
+            opacity: 0; transition: opacity 0.3s; z-index: 2000; border: 1px solid #ffeb3b;
+        }
+
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none;
+            flex-direction: column; justify-content: center; align-items: center; z-index: 3000;
+            backdrop-filter: blur(8px);
         }
     </style>
 </head>
@@ -99,6 +124,12 @@
         <button onclick="game.init()">新遊戲</button>
     </div>
 
+    <div id="end-overlay" class="overlay">
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2rem;"></h2>
+        <p>最終得分：<span id="final-score">0</span></p>
+        <button onclick="game.init()" style="margin-top: 20px;">再玩一次</button>
+    </div>
+
     <script>
         const SUITS = ['H', 'D', 'C', 'S'];
         const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
@@ -114,6 +145,7 @@
 
             init() {
                 if (this.isAnimating) return;
+                document.getElementById('end-overlay').style.display = 'none';
                 this.gridEl.innerHTML = '';
                 this.cardMap.clear();
                 this.deck = [];
@@ -122,9 +154,9 @@
                 this.table = this.deck.splice(0, 25);
                 this.score = 0;
                 this.selectedIdx = null;
-                // 確保先渲染 DOM 再更新 UI
                 this.table.forEach((card, i) => { if (card) this.createCardDOM(card, i); });
                 this.updateUI();
+                this.checkGameState();
             }
 
             shuffle(arr) {
@@ -134,37 +166,29 @@
                 }
             }
 
-            // 使用更強健的方式獲取尺寸
-            getDimensions() {
-                const testDiv = document.createElement('div');
-                testDiv.style.width = 'var(--card-w)';
-                testDiv.style.height = 'var(--card-h)';
-                testDiv.style.margin = 'var(--gap)';
-                document.body.appendChild(testDiv);
-                const style = getComputedStyle(testDiv);
-                const d = {
-                    w: parseFloat(style.width),
-                    h: parseFloat(style.height),
-                    g: parseFloat(style.margin)
-                };
-                document.body.removeChild(testDiv);
-                return d;
+            getDims() {
+                const style = getComputedStyle(document.documentElement);
+                const container = this.gridEl.getBoundingClientRect();
+                // 為了絕對穩定，若讀取不到則使用預設值
+                const w = parseFloat(style.getPropertyValue('--card-w')) || 75;
+                const h = parseFloat(style.getPropertyValue('--card-h')) || 105;
+                const g = parseFloat(style.getPropertyValue('--gap')) || 10;
+                return { w, h, g };
             }
 
             getPos(idx) {
-                const dims = this.getDimensions();
+                const { w, h, g } = this.getDims();
                 const r = Math.floor(idx / 5);
                 const c = idx % 5;
                 return {
-                    x: 10 + c * (dims.w + dims.g),
-                    y: 10 + r * (dims.h + dims.g)
+                    x: 10 + c * (w + g),
+                    y: 10 + r * (h + g)
                 };
             }
 
             createCardDOM(card, idx) {
                 const el = document.createElement('div');
                 el.className = 'card';
-                el.dataset.id = card.id;
                 const pos = this.getPos(idx);
                 el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
                 
@@ -185,6 +209,7 @@
 
             async handleClick(i) {
                 if (this.isAnimating || !this.table[i]) return;
+                this.clearHints();
                 const card = this.table[i];
                 const el = this.cardMap.get(card.id);
 
@@ -201,8 +226,10 @@
                     
                     if (card1.r === card.r && this.isAdjacent(idx1, i)) {
                         this.isAnimating = true;
+                        el1.classList.remove('selected');
                         el1.classList.add('match-flash');
                         el.classList.add('match-flash');
+                        
                         await new Promise(r => setTimeout(r, 400));
                         el1.remove(); el.remove();
                         this.cardMap.delete(card1.id);
@@ -227,24 +254,31 @@
                 return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
             }
 
+            clearHints() {
+                this.cardMap.forEach(el => el.classList.remove('hint-flash'));
+            }
+
             tryRepack() {
                 if (this.isAnimating) return;
                 const match = this.findMatch();
                 if (match) {
-                    this.showToast("還有可以消除的牌喔！");
-                } else {
+                    this.showToast("尚有配對牌可消除");
+                    // 恢復之前的提醒方式
+                    this.cardMap.get(this.table[match[0]].id).classList.add('hint-flash');
+                    this.cardMap.get(this.table[match[1]].id).classList.add('hint-flash');
+                } else if (this.table.filter(c => c === null).length > 0) {
                     this.repack();
+                } else {
+                    this.checkGameState();
                 }
             }
 
             async repack() {
                 this.isAnimating = true;
                 this.selectedIdx = null;
-                
-                // 1. 移動現有的卡片
-                let remaining = [];
-                this.table.forEach(c => { if(c) remaining.push(c); });
-                
+                this.cardMap.forEach(el => el.classList.remove('selected', 'hint-flash'));
+
+                let remaining = this.table.filter(c => c !== null);
                 remaining.forEach((card, newIdx) => {
                     const el = this.cardMap.get(card.id);
                     const pos = this.getPos(newIdx);
@@ -255,7 +289,6 @@
                 await new Promise(r => setTimeout(r, 450));
                 this.table = [...remaining, ...Array(25 - remaining.length).fill(null)];
 
-                // 2. 補新牌
                 if (this.deck.length > 0) {
                     for (let i = remaining.length; i < 25; i++) {
                         if (this.deck.length === 0) break;
@@ -263,9 +296,7 @@
                         this.table[i] = newCard;
                         const el = this.createCardDOM(newCard, i);
                         el.style.opacity = '0';
-                        // 強制瀏覽器重繪
-                        el.getBoundingClientRect();
-                        el.style.opacity = '1';
+                        requestAnimationFrame(() => { el.style.opacity = '1'; });
                         this.updateUI();
                         await new Promise(r => setTimeout(r, 80));
                     }
@@ -285,8 +316,15 @@
             }
 
             checkGameState() {
-                if (this.table.filter(c => c).length === 0 && this.deck.length === 0) {
-                    alert("恭喜全消！");
+                const match = this.findMatch();
+                const cardCount = this.table.filter(c => c).length;
+                if (cardCount === 0 && this.deck.length === 0) { this.endGame("恭喜勝利！", true); return; }
+                if (!match) {
+                    const isRepacked = this.table.every((c, i) => i < cardCount ? c !== null : c === null);
+                    if (this.deck.length === 0 && isRepacked) this.endGame("遊戲結束", false);
+                    else if (this.deck.length === 0 && !isRepacked) this.showToast("無配對牌，請點擊排列收攏");
+                    else if (this.deck.length > 0 && cardCount === 25) this.endGame("盤面已滿且無配對", false);
+                    else this.showToast("無配對牌，請重新排列");
                 }
             }
 
@@ -294,6 +332,12 @@
                 const t = document.getElementById('msg-toast');
                 t.innerText = msg; t.style.opacity = '1';
                 setTimeout(() => t.style.opacity = '0', 2000);
+            }
+
+            endGame(title, win) {
+                document.getElementById('end-title').innerText = title;
+                document.getElementById('final-score').innerText = this.score;
+                document.getElementById('end-overlay').style.display = 'flex';
             }
         }
         const game = new MonteCarlo();
