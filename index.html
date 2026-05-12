@@ -7,10 +7,10 @@
     <style>
         :root {
             --bg-color: #1a472a;
-            --card-w: 68px; /* 稍微縮小牌寬以騰出空間 */
+            --card-w: 68px;
             --card-h: 95px;
             --gap: 8px;
-            --container-padding: 10px; /* 縮減內距，讓牌組更往中心靠 */
+            --container-padding: 10px;
             --base-url: 'https://raw.githubusercontent.com/kuochili-ops/xcards/refs/heads/master/svg';
         }
         @media (min-width: 500px) { 
@@ -28,17 +28,22 @@
 
         .header { text-align: center; margin-bottom: 8px; width: 100%; }
         .header h1 { margin: 2px 0; color: #ffeb3b; font-size: 1.3rem; }
+        
+        .stats-bar {
+            display: flex; justify-content: center; gap: 15px;
+            font-size: 0.9rem; margin-bottom: 5px; background: rgba(0,0,0,0.2);
+            padding: 5px 15px; border-radius: 15px;
+        }
+        .stat-item span { color: #ffeb3b; font-weight: bold; }
 
         .grid-container {
             position: relative;
-            /* 修正計算：精確符合 5 張牌 + 4 個間隙 + 兩倍內距 */
             width: calc(5 * var(--card-w) + 4 * var(--gap) + 2 * var(--container-padding));
             height: calc(5 * var(--card-h) + 4 * var(--gap) + 2 * var(--container-padding));
             background: rgba(0,0,0,0.3);
             border-radius: 12px;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
             box-sizing: border-box;
-            /* 移除多餘的左右推力，純粹靠 flex 置中 */
             margin: 0 auto;
         }
 
@@ -50,7 +55,6 @@
             transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
             will-change: transform;
             z-index: 2;
-            /* 起始位置嚴格對齊 padding */
             left: var(--container-padding);
             top: var(--container-padding);
         }
@@ -89,7 +93,7 @@
             100% { opacity: 0; transform: scale(0.2); }
         }
 
-        .controls { margin-top: 20px; display: flex; gap: 12px; }
+        .controls { margin-top: 15px; display: flex; gap: 12px; }
         button {
             padding: 10px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
@@ -115,8 +119,10 @@
 
     <div class="header">
         <h1>𓃥 白六蒙地卡羅接龍</h1>
-        <div style="font-size: 0.9rem;">
-            牌堆: <span id="deck-cnt">--</span> | 分數: <span id="score-cnt">0</span>
+        <div class="stats-bar">
+            <div class="stat-item">牌堆: <span id="deck-cnt">--</span></div>
+            <div class="stat-item">分數: <span id="score-cnt">0</span></div>
+            <div class="stat-item">時間: <span id="timer-display">00:00</span></div>
         </div>
     </div>
 
@@ -129,8 +135,9 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2rem; margin-bottom: 10px; text-align: center;"></h2>
-        <p style="font-size: 1.4rem;">最終得分：<span id="final-score">0</span></p>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.2rem; margin-bottom: 10px; text-align: center;"></h2>
+        <p style="font-size: 1.4rem; margin: 5px 0;">最終得分：<span id="final-score">0</span></p>
+        <p style="font-size: 1.2rem; margin: 5px 0;">耗費時間：<span id="final-time">00:00</span></p>
         <button onclick="game.init()" style="margin-top: 30px;">再玩一次</button>
     </div>
 
@@ -141,11 +148,20 @@
                 this.baseUrl = 'https://raw.githubusercontent.com/kuochili-ops/xcards/refs/heads/master/svg';
                 this.isAnimating = false;
                 this.cardMap = new Map();
+                this.timerInterval = null;
+                this.startTime = null;
                 this.init();
             }
 
             init() {
                 if (this.isAnimating) return;
+                
+                // 重置計時器
+                this.stopTimer();
+                document.getElementById('timer-display').innerText = "00:00";
+                this.startTime = Date.now();
+                this.startTimer();
+
                 document.getElementById('end-overlay').style.display = 'none';
                 this.gridEl.innerHTML = '';
                 this.cardMap.clear();
@@ -162,6 +178,22 @@
                 this.checkGameState();
             }
 
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                    const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                    const secs = (elapsed % 60).toString().padStart(2, '0');
+                    document.getElementById('timer-display').innerText = `${mins}:${secs}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
             shuffle(arr) {
                 for (let i = arr.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -176,10 +208,7 @@
                 const g = parseFloat(style.getPropertyValue('--gap'));
                 const r = Math.floor(idx / 5);
                 const c = idx % 5;
-                return {
-                    x: c * (w + g),
-                    y: r * (h + g)
-                };
+                return { x: c * (w + g), y: r * (h + g) };
             }
 
             createCardDOM(card, idx) {
@@ -187,11 +216,9 @@
                 el.className = 'card';
                 const pos = this.getPos(idx);
                 el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
-                
                 const img = document.createElement('img');
                 img.src = `${this.baseUrl}/face/${card.r}${card.s}.svg`;
                 el.appendChild(img);
-                
                 el.onclick = () => this.handleClick(idx);
                 this.gridEl.appendChild(el);
                 this.cardMap.set(card.id, el);
@@ -206,10 +233,8 @@
             async handleClick(i) {
                 if (this.isAnimating || !this.table[i]) return;
                 this.cardMap.forEach(el => el.classList.remove('hint-flash'));
-                
                 const card = this.table[i];
                 const el = this.cardMap.get(card.id);
-
                 if (this.selectedIdx === null) {
                     this.selectedIdx = i;
                     el.classList.add('selected');
@@ -220,13 +245,11 @@
                     const idx1 = this.selectedIdx;
                     const card1 = this.table[idx1];
                     const el1 = this.cardMap.get(card1.id);
-                    
                     if (card1.r === card.r && this.isAdjacent(idx1, i)) {
                         this.isAnimating = true;
                         el1.classList.remove('selected');
                         el1.classList.add('match-flash');
                         el.classList.add('match-flash');
-                        
                         await new Promise(r => setTimeout(r, 400));
                         el1.remove(); el.remove();
                         this.cardMap.delete(card1.id);
@@ -267,7 +290,6 @@
                 this.isAnimating = true;
                 this.selectedIdx = null;
                 this.cardMap.forEach(el => el.classList.remove('selected', 'hint-flash'));
-
                 let remaining = this.table.filter(c => c !== null);
                 remaining.forEach((card, newIdx) => {
                     const el = this.cardMap.get(card.id);
@@ -275,10 +297,8 @@
                     el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
                     el.onclick = () => this.handleClick(newIdx);
                 });
-
                 await new Promise(r => setTimeout(r, 450));
                 this.table = [...remaining, ...Array(25 - remaining.length).fill(null)];
-
                 if (this.deck.length > 0) {
                     for (let i = remaining.length; i < 25; i++) {
                         if (this.deck.length === 0) break;
@@ -308,18 +328,16 @@
             checkGameState() {
                 const match = this.findMatch();
                 const cardCount = this.table.filter(c => c).length;
-                if (cardCount === 0 && this.deck.length === 0) { this.endGame("🎉 完美消除！勝利！", true); return; }
-
+                if (cardCount === 0 && this.deck.length === 0) {
+                    this.stopTimer();
+                    this.endGame("🎉 完美消除！勝利！", true);
+                    return;
+                }
                 if (!match) {
                     const isRepacked = this.table.every((c, i) => i < cardCount ? c !== null : c === null);
                     if (this.deck.length === 0 && isRepacked) {
+                        this.stopTimer();
                         this.endGame("遊戲結束（無配對）", false);
-                    } else if (this.deck.length === 0 && !isRepacked) {
-                        this.showToast("請點擊排列收攏剩餘卡片");
-                    } else if (this.deck.length > 0 && cardCount === 25) {
-                        this.endGame("遊戲結束（牌面已滿）", false);
-                    } else {
-                        this.showToast("無配對牌，請按排列補牌");
                     }
                 }
             }
@@ -333,6 +351,7 @@
             endGame(title, win) {
                 document.getElementById('end-title').innerText = title;
                 document.getElementById('final-score').innerText = this.score;
+                document.getElementById('final-time').innerText = document.getElementById('timer-display').innerText;
                 document.getElementById('end-overlay').style.display = 'flex';
             }
         }
