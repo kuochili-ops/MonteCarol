@@ -10,11 +10,12 @@
             --card-w: 70px;
             --card-h: 98px;
             --gap: 8px;
-            --container-padding: 12px;
+            /* 調整容器內部邊距，給予兩側更多呼吸空間 */
+            --container-padding: 16px;
             --base-url: 'https://raw.githubusercontent.com/kuochili-ops/xcards/refs/heads/master/svg';
         }
         @media (min-width: 500px) { 
-            :root { --card-w: 80px; --card-h: 112px; --gap: 12px; --container-padding: 15px; } 
+            :root { --card-w: 80px; --card-h: 112px; --gap: 12px; --container-padding: 20px; } 
         }
 
         body {
@@ -22,21 +23,22 @@
             background-image: radial-gradient(circle at center, #2e7d32, #1a472a);
             color: white; font-family: -apple-system, sans-serif;
             display: flex; flex-direction: column; align-items: center;
-            margin: 0; padding: 10px; min-height: 100vh; overflow: hidden;
+            margin: 0; padding: 10px; min-height: 100vh; overflow-x: hidden;
             user-select: none; -webkit-user-select: none;
         }
 
-        .header { text-align: center; margin-bottom: 5px; width: 100%; height: 60px; }
+        .header { text-align: center; margin-bottom: 8px; width: 100%; height: 60px; }
         .header h1 { margin: 2px 0; color: #ffeb3b; font-size: 1.3rem; }
 
         .grid-container {
             position: relative;
-            /* 嚴格計算寬高，確保包含所有 padding 與間距 */
+            /* 讓桌面水平置中 */
+            margin: 0 auto;
             width: calc(5 * var(--card-w) + 4 * var(--gap) + 2 * var(--container-padding));
             height: calc(5 * var(--card-h) + 4 * var(--gap) + 2 * var(--container-padding));
             background: rgba(0,0,0,0.3);
             border-radius: 12px;
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
             box-sizing: border-box;
         }
 
@@ -48,7 +50,7 @@
             transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
             will-change: transform;
             z-index: 2;
-            /* 起始點設在容器 padding 處 */
+            /* 基準點位於內邊距位置 */
             left: var(--container-padding);
             top: var(--container-padding);
         }
@@ -94,20 +96,24 @@
             padding: 10px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
             cursor: pointer; box-shadow: 0 4px 0 #c6a700; font-size: 1rem;
+            transition: transform 0.1s;
         }
+        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #c6a700; }
         button.repack-btn { background: #03a9f4; color: white; box-shadow: 0 4px 0 #0288d1; }
+        button.repack-btn:active { box-shadow: 0 2px 0 #0288d1; }
 
         .toast {
             position: fixed; top: 15%; background: rgba(0,0,0,0.9);
             padding: 10px 20px; border-radius: 20px; color: #ffeb3b;
             opacity: 0; transition: opacity 0.3s; z-index: 2000; border: 1px solid #ffeb3b;
+            pointer-events: none;
         }
 
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); display: none;
+            background: rgba(0,0,0,0.95); display: none;
             flex-direction: column; justify-content: center; align-items: center; z-index: 3000;
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(10px);
         }
     </style>
 </head>
@@ -129,7 +135,7 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem; margin-bottom: 10px;"></h2>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.2rem; margin-bottom: 10px; text-align: center;"></h2>
         <p style="font-size: 1.4rem;">最終得分：<span id="final-score">0</span></p>
         <button onclick="game.init()" style="margin-top: 30px;">再玩一次</button>
     </div>
@@ -176,7 +182,6 @@
                 const g = parseFloat(style.getPropertyValue('--gap'));
                 const r = Math.floor(idx / 5);
                 const c = idx % 5;
-                // 座標計算不包含容器 padding，因為 .card 本身已有 left/top 基數
                 return {
                     x: c * (w + g),
                     y: r * (h + g)
@@ -310,21 +315,19 @@
                 const match = this.findMatch();
                 const cardCount = this.table.filter(c => c).length;
                 
-                // 勝利判定
                 if (cardCount === 0 && this.deck.length === 0) {
-                    this.endGame("恭喜勝利！全消完成", true);
+                    this.endGame("🎉 完美消除！勝利！", true);
                     return;
                 }
 
-                // 結束判定規則恢復
                 if (!match) {
                     const isRepacked = this.table.every((c, i) => i < cardCount ? c !== null : c === null);
                     if (this.deck.length === 0 && isRepacked) {
                         this.endGame("遊戲結束（無配對）", false);
                     } else if (this.deck.length === 0 && !isRepacked) {
-                        this.showToast("無配對牌，請排列收攏剩餘卡片");
+                        this.showToast("請點擊排列收攏剩餘卡片");
                     } else if (this.deck.length > 0 && cardCount === 25) {
-                        this.endGame("遊戲結束（盤面已滿）", false);
+                        this.endGame("遊戲結束（牌面已滿）", false);
                     } else {
                         this.showToast("無配對牌，請按排列補牌");
                     }
