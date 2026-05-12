@@ -217,11 +217,14 @@
                     this.showToast("尚有配對牌可消除");
                     this.gridEl.children[match[0]].classList.add('hint-flash');
                     this.gridEl.children[match[1]].classList.add('hint-flash');
-                } else if (this.deck.length > 0) {
-                    this.repack();
                 } else {
-                    // 已無補牌機會且盤面已無配對，強制執行最終判定
-                    this.checkGameState();
+                    const emptyCount = this.table.filter(c => c === null).length;
+                    if (emptyCount > 0 && this.deck.length > 0) {
+                        this.repack();
+                    } else {
+                        // 雖然還有牌堆，但盤面已滿 (emptyCount == 0) 且無配對，Repack 也無法運作
+                        this.checkGameState();
+                    }
                 }
             }
 
@@ -282,6 +285,7 @@
             checkGameState() {
                 const match = this.findMatch();
                 const cardCount = this.table.filter(c => c).length;
+                const emptyCount = 25 - cardCount;
 
                 // 1. 勝利：盤面與牌堆皆空
                 if (cardCount === 0 && this.deck.length === 0) {
@@ -289,15 +293,14 @@
                     return;
                 }
 
-                // 2. 失敗 (死局判定修正)：
+                // 2. 失敗 (鎖死判斷修正)：
                 // - 如果現在沒配對 (match === null)
-                // - 且牌堆已空 (this.deck.length === 0)
-                // - 代表無法再 Repack 補牌，也沒牌可消，即使場上有空格也是遊戲結束。
-                if (!match && this.deck.length === 0) {
+                // - 且 (牌堆已空 OR 盤面全滿沒空格可 Repack)
+                if (!match && (this.deck.length === 0 || emptyCount === 0)) {
                     this.endGame("遊戲結束", false);
                 } 
-                // 3. 提示 Repack：沒配對但還有補牌機會
-                else if (!match && this.deck.length > 0) {
+                // 3. 提示 Repack：沒配對、盤面有空格、且還有補牌機會
+                else if (!match && this.deck.length > 0 && emptyCount > 0) {
                     this.showToast("無配對牌，請重新排列");
                 }
             }
