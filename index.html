@@ -105,6 +105,7 @@
             position: fixed; top: 15%; background: rgba(0,0,0,0.9);
             padding: 10px 20px; border-radius: 20px; color: #ffeb3b;
             opacity: 0; transition: opacity 0.3s; z-index: 2000; border: 1px solid #ffeb3b;
+            pointer-events: none;
         }
 
         .overlay {
@@ -135,7 +136,7 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.2rem; margin-bottom: 10px; text-align: center;"></h2>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2rem; margin-bottom: 10px; text-align: center;"></h2>
         <p style="font-size: 1.4rem; margin: 5px 0;">最終得分：<span id="final-score">0</span></p>
         <p style="font-size: 1.2rem; margin: 5px 0;">耗費時間：<span id="final-time">00:00</span></p>
         <button onclick="game.init()" style="margin-top: 30px;">再玩一次</button>
@@ -155,13 +156,10 @@
 
             init() {
                 if (this.isAnimating) return;
-                
-                // 重置計時器
                 this.stopTimer();
                 document.getElementById('timer-display').innerText = "00:00";
                 this.startTime = Date.now();
                 this.startTimer();
-
                 document.getElementById('end-overlay').style.display = 'none';
                 this.gridEl.innerHTML = '';
                 this.cardMap.clear();
@@ -188,10 +186,7 @@
             }
 
             stopTimer() {
-                if (this.timerInterval) {
-                    clearInterval(this.timerInterval);
-                    this.timerInterval = null;
-                }
+                if (this.timerInterval) { clearInterval(this.timerInterval); this.timerInterval = null; }
             }
 
             shuffle(arr) {
@@ -328,16 +323,27 @@
             checkGameState() {
                 const match = this.findMatch();
                 const cardCount = this.table.filter(c => c).length;
+                
+                // 1. 勝利判定
                 if (cardCount === 0 && this.deck.length === 0) {
                     this.stopTimer();
                     this.endGame("🎉 完美消除！勝利！", true);
                     return;
                 }
+
+                // 2. 結束判定
                 if (!match) {
                     const isRepacked = this.table.every((c, i) => i < cardCount ? c !== null : c === null);
                     if (this.deck.length === 0 && isRepacked) {
                         this.stopTimer();
                         this.endGame("遊戲結束（無配對）", false);
+                    } else if (this.deck.length === 0 && !isRepacked) {
+                        this.showToast("無配對牌，請點擊排列收攏");
+                    } else if (this.deck.length > 0 && cardCount === 25) {
+                        this.stopTimer();
+                        this.endGame("遊戲結束（盤面已滿）", false);
+                    } else {
+                        this.showToast("無配對牌，請按排列補牌");
                     }
                 }
             }
