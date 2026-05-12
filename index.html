@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>蒙地卡羅接龍 - 智慧引導版</title>
+    <title>𓃥 白六蒙地卡羅接龍</title>
     <style>
         :root {
             --bg-color: #1a472a;
@@ -16,80 +16,88 @@
         body {
             background-color: var(--bg-color);
             background-image: radial-gradient(circle at center, #2e7d32, #1a472a);
-            color: white; font-family: -apple-system, sans-serif;
+            color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex; flex-direction: column; align-items: center;
             margin: 0; padding: 10px; min-height: 100vh; overflow: hidden;
+            user-select: none; -webkit-user-select: none;
         }
 
         .header { text-align: center; margin-bottom: 10px; width: 100%; }
-        .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; }
+        .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 
         .grid {
             display: grid; grid-template-columns: repeat(5, var(--card-w));
             grid-template-rows: repeat(5, var(--card-h));
             gap: 8px; padding: 10px; background: rgba(0,0,0,0.4);
             border-radius: 12px; position: relative; margin: 0 auto;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
         }
 
         .card {
             width: var(--card-w); height: var(--card-h); cursor: pointer;
             border-radius: 6px; position: relative; z-index: 2;
+            transition: transform 0.1s ease;
         }
         .card img {
             width: 100%; height: 100%; border-radius: 6px; display: block;
             box-shadow: 2px 4px 8px rgba(0,0,0,0.5); background: white; pointer-events: none;
         }
+        
+        /* 選取狀態 */
         .card.selected { transform: translateY(-8px); filter: brightness(1.1) drop-shadow(0 0 8px #ffeb3b); z-index: 10; }
         
-        /* 提示閃框動畫 */
+        /* 💡 提示閃框動畫：尚有配對時按 Repack 出現 */
         .card.hint-flash {
             animation: hint-glow 0.6s ease-in-out infinite alternate;
             z-index: 50;
         }
         @keyframes hint-glow {
             from { box-shadow: 0 0 5px #ffeb3b; outline: 2px solid #ffeb3b; }
-            to { box-shadow: 0 0 20px #ffeb3b; outline: 4px solid #fff; }
+            to { box-shadow: 0 0 20px #ffeb3b; outline: 4px solid #fff; transform: scale(1.05); }
         }
 
-        /* 配對消除動畫 */
+        /* ✨ 配對消除動畫 */
         .card.match-flash {
             animation: flash-out 0.5s ease-out forwards;
             z-index: 100;
         }
         @keyframes flash-out {
-            0% { transform: scale(1); filter: brightness(2); }
+            0% { transform: scale(1); filter: brightness(2.5); box-shadow: 0 0 20px #fff; }
             100% { transform: scale(0); opacity: 0; }
         }
 
-        .empty-slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.05); }
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
+        .empty-slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.1); border-radius: 6px; }
+        .controls { margin-top: 20px; display: flex; gap: 12px; }
         
         button {
-            padding: 12px 20px; border: none; border-radius: 25px;
+            padding: 12px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
-            cursor: pointer; box-shadow: 0 4px 0 #c6a700;
+            cursor: pointer; box-shadow: 0 4px 0 #c6a700; font-size: 0.95rem;
         }
+        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #c6a700; }
         button.repack-btn { background: #03a9f4; color: white; box-shadow: 0 4px 0 #0288d1; }
 
         .toast {
-            position: fixed; top: 18%; background: rgba(0,0,0,0.9);
-            padding: 12px 24px; border-radius: 30px; color: #ffeb3b;
+            position: fixed; top: 15%; background: rgba(0,0,0,0.85);
+            padding: 12px 28px; border-radius: 30px; color: #ffeb3b;
             font-weight: bold; opacity: 0; transition: opacity 0.3s; 
             z-index: 2000; border: 2px solid #ffeb3b; pointer-events: none;
+            backdrop-filter: blur(4px);
         }
 
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); display: none;
+            background: rgba(0,0,0,0.9); display: none;
             flex-direction: column; justify-content: center; align-items: center; z-index: 3000;
+            backdrop-filter: blur(8px);
         }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1>蒙地卡羅接龍</h1>
-        <div style="font-size: 0.9rem;">
+        <h1>𓃥 白六蒙地卡羅接龍</h1>
+        <div style="font-size: 0.9rem; margin-top: 5px;">
             牌堆: <span id="deck-cnt">--</span> | 分數: <span id="score-cnt">0</span>
         </div>
     </div>
@@ -103,9 +111,9 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem;"></h2>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem; margin: 10px 0;"></h2>
         <p style="font-size: 1.4rem;">最終得分：<span id="final-score">0</span></p>
-        <button onclick="game.init()" style="margin-top: 30px">再玩一次</button>
+        <button onclick="game.init()" style="margin-top: 30px; padding: 15px 50px; font-size: 1.2rem;">再玩一次</button>
     </div>
 
     <script>
@@ -130,6 +138,7 @@
                 this.score = 0;
                 this.selectedIdx = null;
                 this.render();
+                this.checkGameState();
             }
 
             shuffle(arr) {
@@ -159,7 +168,7 @@
 
             async handleClick(i) {
                 if (this.isAnimating || !this.table[i]) return;
-                this.clearHints(); // 點擊時清除所有提示框
+                this.clearHints(); 
 
                 if (this.selectedIdx === null) {
                     this.selectedIdx = i;
@@ -189,11 +198,11 @@
                 return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
             }
 
-            // 尋找場上第一組可配對的牌
             findMatch() {
                 for (let i = 0; i < 25; i++) {
+                    if (!this.table[i]) continue;
                     for (let j = i + 1; j < 25; j++) {
-                        if (this.table[i] && this.table[j] && this.table[i].r === this.table[j].r && this.isAdjacent(i, j)) {
+                        if (this.table[j] && this.table[i].r === this.table[j].r && this.isAdjacent(i, j)) {
                             return [i, j];
                         }
                     }
@@ -213,12 +222,10 @@
                     this.showToast("尚有配對牌可消除");
                     this.gridEl.children[match[0]].classList.add('hint-flash');
                     this.gridEl.children[match[1]].classList.add('hint-flash');
+                } else if (this.deck.length > 0) {
+                    this.repack();
                 } else {
-                    if (this.deck.length > 0) {
-                        this.repack();
-                    } else {
-                        this.checkGameState(); // 沒牌可排也沒牌可發，檢查是否結束
-                    }
+                    this.checkGameState();
                 }
             }
 
@@ -232,20 +239,20 @@
                 this.table = [...remaining, ...Array(25 - remaining.length).fill(null)];
                 this.render();
 
-                // 收攏動畫
+                // 階段一：收攏現有的牌
                 const currentCards = Array.from(this.gridEl.querySelectorAll('.card'));
-                let dur = 0;
+                let shiftDuration = 0;
                 for (let el of currentCards) {
                     const oldPos = oldRects.get(el.dataset.id);
                     const newPos = el.getBoundingClientRect();
                     if (oldPos && (Math.abs(oldPos.left - newPos.left) > 1 || Math.abs(oldPos.top - newPos.top) > 1)) {
                         el.animate([{ transform: `translate(${oldPos.left - newPos.left}px, ${oldPos.top - newPos.top}px)` }, { transform: 'none' }], { duration: 500, easing: 'ease-in-out' });
-                        dur = 500;
+                        shiftDuration = 500;
                     }
                 }
-                await new Promise(r => setTimeout(r, dur + 100));
+                await new Promise(r => setTimeout(r, shiftDuration + 100));
 
-                // 補牌動畫
+                // 階段二：精確插入新牌 (不再全 Grid 重刷，避免閃爍)
                 if (this.deck.length > 0) {
                     const emptyCount = 25 - remaining.length;
                     const gridRect = this.gridEl.getBoundingClientRect();
@@ -254,17 +261,22 @@
                         const newCard = this.deck.shift();
                         const targetIdx = remaining.length + i;
                         this.table[targetIdx] = newCard;
+
+                        const oldSlot = this.gridEl.children[targetIdx];
                         const newCardEl = document.createElement('div');
                         newCardEl.className = 'card';
                         newCardEl.dataset.id = newCard.id;
                         const img = document.createElement('img'); img.src = `${this.baseUrl}/face/${newCard.r}${newCard.s}.svg`;
                         newCardEl.appendChild(img);
                         newCardEl.onclick = () => this.handleClick(targetIdx);
+
                         newCardEl.style.opacity = '0';
-                        this.gridEl.replaceChild(newCardEl, this.gridEl.children[targetIdx]);
+                        this.gridEl.replaceChild(newCardEl, oldSlot);
+
                         const newPos = newCardEl.getBoundingClientRect();
                         newCardEl.animate([{ opacity: 0, transform: `translate(${gridRect.right - newPos.left}px, ${gridRect.bottom - newPos.top}px) scale(0.5)` }, { opacity: 1, transform: 'none' }], { duration: 500, easing: 'ease-out' });
                         newCardEl.style.opacity = '1';
+                        
                         document.getElementById('deck-cnt').innerText = this.deck.length;
                         await new Promise(r => setTimeout(r, 100));
                     }
@@ -296,6 +308,7 @@
 
             endGame(title, win) {
                 document.getElementById('end-title').innerText = title;
+                document.getElementById('end-title').style.color = win ? "#4caf50" : "#ffeb3b";
                 document.getElementById('final-score').innerText = this.score;
                 document.getElementById('end-overlay').style.display = 'flex';
             }
