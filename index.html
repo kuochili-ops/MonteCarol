@@ -12,7 +12,6 @@
             --gap: 10px;
             --base-url: 'https://raw.githubusercontent.com/kuochili-ops/xcards/refs/heads/master/svg';
         }
-        /* 行動裝置適配，確保計算精確防止晃動 */
         @media (max-width: 500px) {
             :root {
                 --card-w: calc((100vw - 80px) / 5);
@@ -33,7 +32,6 @@
         .header { text-align: center; margin-bottom: 10px; width: 100%; height: 60px; }
         .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; }
 
-        /* 核心穩定容器：強制固定寬高，禁止任何尺寸變動 */
         .grid-container {
             position: relative;
             width: calc(5 * var(--card-w) + 4 * var(--gap) + 20px);
@@ -41,7 +39,6 @@
             background: rgba(0,0,0,0.4);
             border-radius: 12px;
             box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
-            overflow: hidden; /* 防止卡片飛出容器邊界 */
         }
 
         .card {
@@ -49,10 +46,10 @@
             width: var(--card-w);
             height: var(--card-h);
             cursor: pointer;
-            /* 使用 transform 進行位移，避免觸發 Layout 重排 */
-            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s;
-            will-change: transform; /* 預告瀏覽器將有位移，提早開啟 GPU 加速 */
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+            will-change: transform;
             left: 0; top: 0;
+            z-index: 2;
         }
         
         .card img {
@@ -60,30 +57,36 @@
             box-shadow: 2px 4px 8px rgba(0,0,0,0.4); background: white; pointer-events: none;
         }
         
-        .card.selected { z-index: 50; filter: brightness(1.1); transform: scale(1.05) !important; }
-        .card.selected img { box-shadow: 0 0 15px #ffeb3b; }
+        .card.selected { z-index: 50; transform: scale(1.1) !important; }
+        .card.selected img { box-shadow: 0 0 20px #ffeb3b; outline: 3px solid #ffeb3b; }
+
+        .card.hint-flash { animation: hint-glow 0.6s ease-in-out infinite alternate; z-index: 40; }
+        @keyframes hint-glow {
+            from { filter: brightness(1.2); box-shadow: 0 0 5px #ffeb3b; }
+            to { filter: brightness(1.5); box-shadow: 0 0 25px #ffeb3b; }
+        }
 
         .card.match-flash {
             animation: flash-out 0.4s ease-out forwards;
             z-index: 100;
         }
         @keyframes flash-out {
-            0% { opacity: 1; filter: brightness(3); }
-            100% { opacity: 0; transform: scale(0.5); }
+            0% { opacity: 1; filter: brightness(3); transform: scale(1.1); }
+            100% { opacity: 0; transform: scale(0.3); }
         }
 
         .controls { margin-top: 20px; display: flex; gap: 12px; }
         button {
             padding: 12px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
-            cursor: pointer; box-shadow: 0 4px 0 #c6a700;
+            cursor: pointer; box-shadow: 0 4px 0 #c6a700; font-size: 1rem;
         }
         button.repack-btn { background: #03a9f4; color: white; box-shadow: 0 4px 0 #0288d1; }
 
         .toast {
             position: fixed; top: 15%; background: rgba(0,0,0,0.9);
             padding: 10px 20px; border-radius: 20px; color: #ffeb3b;
-            opacity: 0; transition: opacity 0.3s; z-index: 2000;
+            opacity: 0; transition: opacity 0.3s; z-index: 2000; border: 1px solid #ffeb3b;
         }
 
         .overlay {
@@ -112,8 +115,8 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem;"></h2>
-        <p>最終得分：<span id="final-score">0</span></p>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem; margin-bottom: 10px;"></h2>
+        <p style="font-size: 1.2rem;">最終得分：<span id="final-score">0</span></p>
         <button onclick="game.init()" style="margin-top: 20px;">再玩一次</button>
     </div>
 
@@ -168,8 +171,9 @@
             createCardDOM(card, idx) {
                 const el = document.createElement('div');
                 el.className = 'card';
+                el.id = `card-${card.id}`;
                 const pos = this.getPos(idx);
-                el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`; // 強制 3D 加速
+                el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
                 
                 const img = document.createElement('img');
                 img.src = `${this.baseUrl}/face/${card.r}${card.s}.svg`;
@@ -188,6 +192,7 @@
 
             async handleClick(i) {
                 if (this.isAnimating || !this.table[i]) return;
+                this.clearHints();
                 const card = this.table[i];
                 const el = this.cardMap.get(card.id);
 
@@ -232,11 +237,17 @@
                 return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
             }
 
+            clearHints() {
+                this.cardMap.forEach(el => el.classList.remove('hint-flash'));
+            }
+
             tryRepack() {
                 if (this.isAnimating) return;
                 const match = this.findMatch();
                 if (match) {
                     this.showToast("尚有配對牌可消除");
+                    this.cardMap.get(this.table[match[0]].id).classList.add('hint-flash');
+                    this.cardMap.get(this.table[match[1]].id).classList.add('hint-flash');
                 } else if (this.table.filter(c => c === null).length > 0) {
                     this.repack();
                 } else {
@@ -249,19 +260,21 @@
                 this.selectedIdx = null;
                 this.cardMap.forEach(el => el.classList.remove('selected'));
 
-                // 1. 收攏
+                // 1. 收攏：計算並移動現有卡片
                 let remaining = this.table.filter(c => c !== null);
                 remaining.forEach((card, newIdx) => {
                     const el = this.cardMap.get(card.id);
                     const pos = this.getPos(newIdx);
                     el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
-                    el.onclick = () => this.handleClick(newIdx);
+                    el.onclick = () => this.handleClick(newIdx); // 更新點擊閉包
                 });
 
                 await new Promise(r => setTimeout(r, 450));
+                
+                // 更新 table 陣列索引
                 this.table = [...remaining, ...Array(25 - remaining.length).fill(null)];
 
-                // 2. 補牌
+                // 2. 補牌：從缺口處開始補
                 if (this.deck.length > 0) {
                     for (let i = remaining.length; i < 25; i++) {
                         if (this.deck.length === 0) break;
@@ -269,10 +282,9 @@
                         this.table[i] = newCard;
                         const el = this.createCardDOM(newCard, i);
                         el.style.opacity = '0';
-                        // 使用 requestAnimationFrame 確保透明度變化在下一幀渲染，避免跳動
                         requestAnimationFrame(() => { el.style.opacity = '1'; });
                         this.updateUI();
-                        await new Promise(r => setTimeout(r, 60));
+                        await new Promise(r => setTimeout(r, 80));
                     }
                 }
                 this.isAnimating = false;
@@ -296,8 +308,8 @@
                 if (!match) {
                     const isRepacked = this.table.every((c, i) => i < cardCount ? c !== null : c === null);
                     if (this.deck.length === 0 && isRepacked) this.endGame("遊戲結束", false);
-                    else if (this.deck.length === 0 && !isRepacked) this.showToast("請按排列收攏剩餘卡片");
-                    else if (this.deck.length > 0 && cardCount === 25) this.endGame("遊戲結束", false);
+                    else if (this.deck.length === 0 && !isRepacked) this.showToast("無配對牌，請點擊排列收攏");
+                    else if (this.deck.length > 0 && cardCount === 25) this.endGame("盤面已滿且無配對", false);
                     else this.showToast("無配對牌，請重新排列");
                 }
             }
