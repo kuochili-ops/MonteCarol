@@ -19,16 +19,18 @@
             color: white; font-family: -apple-system, sans-serif;
             display: flex; flex-direction: column; align-items: center;
             margin: 0; padding: 10px; min-height: 100vh; overflow: hidden;
+            user-select: none; -webkit-user-select: none;
         }
 
         .header { text-align: center; margin-bottom: 10px; width: 100%; }
-        .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; }
+        .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 
         .grid {
             display: grid; grid-template-columns: repeat(5, var(--card-w));
             grid-template-rows: repeat(5, var(--card-h));
             gap: 8px; padding: 10px; background: rgba(0,0,0,0.4);
             border-radius: 12px; position: relative; margin: 0 auto;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
         }
 
         .card {
@@ -39,6 +41,7 @@
             width: 100%; height: 100%; border-radius: 6px; display: block;
             box-shadow: 2px 4px 8px rgba(0,0,0,0.5); background: white; pointer-events: none;
         }
+        
         .card.selected { transform: translateY(-8px); filter: brightness(1.1) drop-shadow(0 0 8px #ffeb3b); z-index: 10; }
         
         .card.hint-flash {
@@ -55,31 +58,33 @@
             z-index: 100;
         }
         @keyframes flash-out {
-            0% { transform: scale(1); filter: brightness(2); }
+            0% { transform: scale(1); filter: brightness(2.5); }
             100% { transform: scale(0); opacity: 0; }
         }
 
-        .empty-slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.05); }
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
+        .empty-slot { width: var(--card-w); height: var(--card-h); border: 1px dashed rgba(255,255,255,0.1); border-radius: 6px; }
+        .controls { margin-top: 20px; display: flex; gap: 12px; }
         
         button {
-            padding: 12px 20px; border: none; border-radius: 25px;
+            padding: 12px 24px; border: none; border-radius: 25px;
             background: #ffeb3b; color: #1b5e20; font-weight: bold;
-            cursor: pointer; box-shadow: 0 4px 0 #c6a700;
+            cursor: pointer; box-shadow: 0 4px 0 #c6a700; font-size: 0.95rem;
         }
+        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #c6a700; }
         button.repack-btn { background: #03a9f4; color: white; box-shadow: 0 4px 0 #0288d1; }
 
         .toast {
-            position: fixed; top: 18%; background: rgba(0,0,0,0.9);
-            padding: 12px 24px; border-radius: 30px; color: #ffeb3b;
+            position: fixed; top: 15%; background: rgba(0,0,0,0.85);
+            padding: 12px 28px; border-radius: 30px; color: #ffeb3b;
             font-weight: bold; opacity: 0; transition: opacity 0.3s; 
             z-index: 2000; border: 2px solid #ffeb3b; pointer-events: none;
         }
 
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); display: none;
+            background: rgba(0,0,0,0.9); display: none;
             flex-direction: column; justify-content: center; align-items: center; z-index: 3000;
+            backdrop-filter: blur(8px);
         }
     </style>
 </head>
@@ -101,9 +106,9 @@
     </div>
 
     <div id="end-overlay" class="overlay">
-        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem;"></h2>
+        <h2 id="end-title" style="color: #ffeb3b; font-size: 2.5rem; margin-bottom: 10px;"></h2>
         <p style="font-size: 1.4rem;">最終得分：<span id="final-score">0</span></p>
-        <button onclick="game.init()" style="margin-top: 30px">再玩一次</button>
+        <button onclick="game.init()" style="margin-top: 30px; padding: 15px 40px;">再玩一次</button>
     </div>
 
     <script>
@@ -215,7 +220,7 @@
                 } else if (this.deck.length > 0) {
                     this.repack();
                 } else {
-                    // 已無補牌且目前無配對，直接判定遊戲結束
+                    // 已無補牌機會且盤面已無配對，強制執行最終判定
                     this.checkGameState();
                 }
             }
@@ -250,17 +255,22 @@
                         const newCard = this.deck.shift();
                         const targetIdx = remaining.length + i;
                         this.table[targetIdx] = newCard;
+
+                        const oldSlot = this.gridEl.children[targetIdx];
                         const newCardEl = document.createElement('div');
                         newCardEl.className = 'card';
                         newCardEl.dataset.id = newCard.id;
                         const img = document.createElement('img'); img.src = `${this.baseUrl}/face/${newCard.r}${newCard.s}.svg`;
                         newCardEl.appendChild(img);
                         newCardEl.onclick = () => this.handleClick(targetIdx);
+
                         newCardEl.style.opacity = '0';
-                        this.gridEl.replaceChild(newCardEl, this.gridEl.children[targetIdx]);
+                        this.gridEl.replaceChild(newCardEl, oldSlot);
+
                         const newPos = newCardEl.getBoundingClientRect();
                         newCardEl.animate([{ opacity: 0, transform: `translate(${gridRect.right - newPos.left}px, ${gridRect.bottom - newPos.top}px) scale(0.5)` }, { opacity: 1, transform: 'none' }], { duration: 500, easing: 'ease-out' });
                         newCardEl.style.opacity = '1';
+                        
                         document.getElementById('deck-cnt').innerText = this.deck.length;
                         await new Promise(r => setTimeout(r, 100));
                     }
@@ -273,18 +283,21 @@
                 const match = this.findMatch();
                 const cardCount = this.table.filter(c => c).length;
 
-                // 勝利條件：所有牌都消除（盤面與牌堆皆空）
+                // 1. 勝利：盤面與牌堆皆空
                 if (cardCount === 0 && this.deck.length === 0) {
                     this.endGame("恭喜！全配對消除", true);
                     return;
                 }
 
-                // 失敗/死局條件：
-                // 1. 目前無可配對牌
-                // 2. 且牌堆已空 (無法再進行 Repack 補牌)
+                // 2. 失敗 (死局判定修正)：
+                // - 如果現在沒配對 (match === null)
+                // - 且牌堆已空 (this.deck.length === 0)
+                // - 代表無法再 Repack 補牌，也沒牌可消，即使場上有空格也是遊戲結束。
                 if (!match && this.deck.length === 0) {
                     this.endGame("遊戲結束", false);
-                } else if (!match && this.deck.length > 0) {
+                } 
+                // 3. 提示 Repack：沒配對但還有補牌機會
+                else if (!match && this.deck.length > 0) {
                     this.showToast("無配對牌，請重新排列");
                 }
             }
@@ -297,6 +310,7 @@
 
             endGame(title, win) {
                 document.getElementById('end-title').innerText = title;
+                document.getElementById('end-title').style.color = win ? "#4caf50" : "#ffeb3b";
                 document.getElementById('final-score').innerText = this.score;
                 document.getElementById('end-overlay').style.display = 'flex';
             }
