@@ -26,8 +26,7 @@
         .header h1 { margin: 5px 0; color: #ffeb3b; font-size: 1.4rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 
         .grid {
-            display: grid; 
-            grid-template-columns: repeat(5, var(--card-w));
+            display: grid; grid-template-columns: repeat(5, var(--card-w));
             grid-template-rows: repeat(5, var(--card-h));
             gap: 8px; padding: 10px; background: rgba(0,0,0,0.4);
             border-radius: 12px; position: relative; margin: 0 auto;
@@ -204,7 +203,6 @@
                     this.gridEl.children[match[1]].classList.add('hint-flash');
                 } else {
                     const emptyCount = this.table.filter(c => c === null).length;
-                    // 只要有空格，無論牌堆有沒有牌，都允許執行收攏動畫
                     if (emptyCount > 0) {
                         this.repack();
                     } else {
@@ -260,6 +258,7 @@
                     }
                 }
                 this.isAnimating = false;
+                // 重點：收攏與補牌動畫徹底結束後，進行最後的死局檢查
                 this.checkGameState();
             }
 
@@ -273,22 +272,35 @@
                     return;
                 }
 
-                // 修改：即使牌堆空了，只要有配對(match)存在就不算結束。
-                // 只有在無配對的情況下，檢查是否連 Repack (空格收攏) 都沒機會做。
                 if (!match) {
-                    if (this.deck.length === 0 && emptyCount === 0) {
+                    // 終極判定條件：
+                    // 1. 牌堆已空
+                    // 2. 盤面已經收攏完畢（所有的牌都已經靠左上，也就是剩下的空格都在最後面）
+                    // 3. 即使這樣還是沒有 match
+                    const isFullyRepacked = this.isTableRepacked();
+                    
+                    if (this.deck.length === 0 && isFullyRepacked) {
                         this.endGame("遊戲結束", false);
-                    } else if (this.deck.length === 0 && emptyCount > 0) {
-                        // 雖然沒牌補，但有空格可以按 Repack 收攏，提示玩家
-                        this.showToast("無配對牌，請按排列收攏剩餘卡片");
+                    } else if (this.deck.length === 0 && !isFullyRepacked) {
+                        // 提示玩家，雖然沒牌補，但按 Repack 還有機會（因為還沒收攏）
+                        this.showToast("無配對牌，請按排列嘗試最後收攏");
                     } else if (this.deck.length > 0 && emptyCount === 0) {
                         // 盤面滿了且無配對，死局
                         this.endGame("遊戲結束", false);
                     } else {
-                        // 有空格且有牌補
                         this.showToast("無配對牌，請重新排列");
                     }
                 }
+            }
+
+            // 輔助函式：判斷目前的盤面是否已經處於收攏狀態（所有空位都在陣列尾端）
+            isTableRepacked() {
+                let foundNull = false;
+                for (let i = 0; i < 25; i++) {
+                    if (this.table[i] === null) foundNull = true;
+                    else if (foundNull) return false; // 在發現空格後又發現卡片，代表還沒收攏
+                }
+                return true;
             }
 
             showToast(msg) {
